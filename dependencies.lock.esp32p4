@@ -1,0 +1,196 @@
+dependencies:
+  bblanchon/arduinojson:
+    component_hash: 5e6aff2bc5bc988b36c8e90c01e637495ee895ad3af93911860c21ec6da79b6a
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 7.4.3
+  david-cermak/libssh:
+    dependencies:
+    - name: espressif/sock_utils
+      version: '*'
+    - name: idf
+      version: '>=5.2'
+    source:
+      path: /Users/leslieleung/Projects/m5stack/projects/tabby/components/libssh
+      type: local
+    version: 0.12.2
+  espressif/eppp_link:
+    component_hash: 04f7f31868b8ae6014c96132740a192d09611a6e46aaa7038c865ffc7e26b38f
+    dependencies:
+    - name: espressif/esp_serial_slave_link
+      registry_url: https://components.espressif.com
+      require: private
+      version: ^1.1.0
+    - name: idf
+      require: private
+      version: '>=5.2'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.1.5
+  espressif/esp_hosted:
+    component_hash: ef6bc803451fab3c3f9a679bbc1c48fba0ceeeabc5af4178dd7d2300fafa423e
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.4.0
+  espressif/esp_serial_slave_link:
+    component_hash: ac1776806de0a6e371c84e87898bb983e19ce62aa7f1e2e5c4a3b0234a575d2c
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.1.2
+  espressif/esp_tinyusb:
+    component_hash: 9a73a76a6bc17907f6e523342ff6b1e440023e8aac2c11f4691212106ec24e66
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    - name: espressif/tinyusb
+      registry_url: https://components.espressif.com
+      require: public
+      version: '>=0.17.0~2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32h4
+    - esp32s31
+    version: 2.2.1
+  espressif/esp_wifi_remote:
+    component_hash: f772731a8cc7361a3eb416eac94ac46cf85369cb996c5a5fc9245a07f241fee2
+    dependencies:
+    - name: espressif/eppp_link
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=0.1'
+    - name: espressif/esp_hosted
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: target in [esp32h2, esp32p4]
+      version: '>=0.0.6'
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.8.5
+  espressif/sock_utils:
+    component_hash: b2e5cafc60dfefd05720ababb9fca0dfe2830fb9d71f97e5336de36a84c591c9
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.2.2
+  espressif/tinyusb:
+    component_hash: a40b7f67df6ac254a4afd96c6401cc56f2059ae747d6d7e66b568bca53ad0edc
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32h4
+    - esp32s31
+    version: 0.19.0~3
+  espressif/usb_host_hid:
+    component_hash: a6c5366f9b6d80b0d5f56d085d62941464512e0968b96c5877e76a80fcc23f13
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    - name: espressif/usb
+      registry_url: https://components.espressif.com
+      require: public
+      rules:
+      - if: idf_version >=6.0
+      - if: target not in ["linux"]
+      version: ^1.0.0
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32h4
+    - esp32s31
+    - linux
+    version: 1.2.0
+  idf:
+    source:
+      type: idf
+    version: 5.4.4
+  joltwallet/littlefs:
+    component_hash: 01faa388c6305fe77fd6962cda6171e753033458f24f8fae9e9d932e3d817a4c
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.22.1
+  lvgl/lvgl:
+    component_hash: d7c1ac037ae6e85d94897f807d6e7ba0946a83e720074fc95a4f6241da9f9f53
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 8.4.0
+  m5stack/M5Unified:
+    component_hash: c724c46511f68cdef357956fb797af558644be707c9adeabd83fce8ce8c8b992
+    dependencies:
+    - name: m5stack/m5gfx
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=0.2.27'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.2.20
+  m5stack/m5gfx:
+    component_hash: b07a5242ed42389520da0ef969e38d85168398ac21bdc80ea621ca887b09f904
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 0.2.27
+direct_dependencies:
+- bblanchon/arduinojson
+- david-cermak/libssh
+- espressif/esp_hosted
+- espressif/esp_tinyusb
+- espressif/esp_wifi_remote
+- espressif/sock_utils
+- espressif/usb_host_hid
+- idf
+- joltwallet/littlefs
+- lvgl/lvgl
+- m5stack/M5Unified
+manifest_hash: f90b2387bdcdd28624162dabb0b2811422b5540c041340f54dbb1c7bfc719113
+target: esp32p4
+version: 2.0.0

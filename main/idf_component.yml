@@ -1,0 +1,16 @@
+## Tabby dependencies for M5Stack Tab5 (ESP32-P4 + ESP32-C6)
+## Target ESP-IDF: 5.4.4 (M5Unified/M5GFX do not support IDF 6.x yet).
+dependencies:
+  idf: ">=5.4,<5.5"
+  m5stack/M5Unified: ">=0.2.19"
+  lvgl/lvgl: "8.4.0"
+  bblanchon/arduinojson: "^7.4.3"
+  joltwallet/littlefs: "^1.20.0"
+  espressif/esp_hosted: "1.4.0"
+  espressif/esp_wifi_remote: "0.8.5"
+  espressif/usb_host_hid: "^1.1.0"
+  espressif/esp_tinyusb: "^2.0.0"
+  # Local copy: upstream CMakeLists comments out scp.c; we keep it enabled.
+  david-cermak/libssh:
+    version: "^0.12.0"
+    override_path: "../components/libssh"

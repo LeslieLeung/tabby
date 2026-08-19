@@ -1,0 +1,8 @@
+/build/
+/build-host/
+/managed_components/
+/sdkconfig
+/sdkconfig.old
+.scratch
+
+.DS_Store
