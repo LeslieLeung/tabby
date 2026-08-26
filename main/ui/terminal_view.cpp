@@ -14,6 +14,7 @@ namespace {
 constexpr uint16_t kBg = 0x10A2;  // dark blue-gray
 constexpr uint16_t kFg = 0xE73C;  // light gray
 constexpr uint16_t kCursor = 0x07E0;
+constexpr int kScrollbarW = 4;
 
 }  // namespace
 
@@ -65,9 +66,13 @@ void TerminalView::fillCell(int col, int row, uint16_t color) {
 void TerminalView::clearRow(int row) {
     const int y0 = row * cell_h_;
     const int count = std::min(cell_h_, height_ - y0);
+    // Preserve the scrollbar. Fonts whose final cell overlaps it repaint it
+    // explicitly below; the common fonts leave a margin and avoid a tall,
+    // narrow LVGL invalidation on every changed row.
+    const int clear_width = std::max(0, width_ - kScrollbarW);
     for (int y = 0; y < count; ++y) {
         uint16_t* line = pixels_ + static_cast<size_t>(y0 + y) * width_;
-        std::fill(line, line + width_, kBg);
+        std::fill(line, line + clear_width, kBg);
     }
 }
 
@@ -109,29 +114,38 @@ uint16_t TerminalView::terminalColor(uint32_t color, bool bold) const {
     return kFg;
 }
 
-void TerminalView::drawScrollbar(size_t offset, size_t max_offset, size_t visible, size_t total) {
-    constexpr int kBarW = 4;
+bool TerminalView::drawScrollbar(size_t offset, size_t max_offset, size_t visible, size_t total, bool force) {
     constexpr uint16_t kTrack = 0x2124;
     constexpr uint16_t kThumb = 0x7BEF;
-    if (pixels_ == nullptr || width_ < kBarW) return;
-    const int x0 = width_ - kBarW;
+    if (pixels_ == nullptr || width_ < kScrollbarW) return false;
+
+    const bool track_visible = total > visible && max_offset != 0;
+    int thumb_h = 0;
+    int thumb_y = 0;
+    if (track_visible) {
+        thumb_h = std::min(
+            height_, std::max(cell_h_, static_cast<int>((static_cast<size_t>(height_) * visible) / total)));
+        const int travel = std::max(0, height_ - thumb_h);
+        thumb_y = static_cast<int>((static_cast<size_t>(travel) * (max_offset - offset)) / max_offset);
+    }
+    if (!force && track_visible == scrollbar_track_visible_ && thumb_h == scrollbar_thumb_h_ &&
+        thumb_y == scrollbar_thumb_y_) {
+        return false;
+    }
+
+    scrollbar_track_visible_ = track_visible;
+    scrollbar_thumb_h_ = thumb_h;
+    scrollbar_thumb_y_ = thumb_y;
+    const int x0 = width_ - kScrollbarW;
     for (int y = 0; y < height_; ++y) {
         uint16_t* line = pixels_ + y * width_ + x0;
-        std::fill(line, line + kBarW, kBg);
+        std::fill(line, line + kScrollbarW, track_visible ? kTrack : kBg);
     }
-    if (total <= visible || max_offset == 0) return;
-    for (int y = 0; y < height_; ++y) {
-        uint16_t* line = pixels_ + y * width_ + x0;
-        std::fill(line, line + kBarW, kTrack);
-    }
-    const int thumb_h = std::min(
-        height_, std::max(cell_h_, static_cast<int>((static_cast<size_t>(height_) * visible) / total)));
-    const int travel = std::max(0, height_ - thumb_h);
-    const int thumb_y = static_cast<int>((static_cast<size_t>(travel) * (max_offset - offset)) / max_offset);
     for (int y = 0; y < thumb_h && thumb_y + y < height_; ++y) {
         uint16_t* line = pixels_ + (thumb_y + y) * width_ + x0;
-        std::fill(line, line + kBarW, kThumb);
+        std::fill(line, line + kScrollbarW, kThumb);
     }
+    return true;
 }
 
 void TerminalView::drawText(int col, int row, const std::string& text, uint16_t fg, uint16_t bg) {
@@ -180,7 +194,7 @@ void TerminalView::invalidateScrollbar() {
 }
 
 void TerminalView::render(const TerminalBuffer& buffer, const std::string& command_line, size_t cursor,
-                          bool show_cursor, const char* prompt) {
+                          bool show_cursor, const char* prompt, bool show_input) {
     if (pixels_ == nullptr) return;
     const char* prompt_text = prompt ? prompt : "[tabby] ";
     const size_t input_row = buffer.inputViewportRow();
@@ -195,17 +209,17 @@ void TerminalView::render(const TerminalBuffer& buffer, const std::string& comma
     const size_t prompt_cols = utf8DisplayCols(prompt_text);
     const size_t command_cols = utf8DisplayCols(command_line, cursor);
     const int cursor_col =
-        show_cursor
+        show_cursor && show_input
             ? static_cast<int>(std::min(prompt_cols + command_cols, static_cast<size_t>(std::max(0, columns_ - 1))))
             : -1;
-    const int cursor_row = show_cursor ? static_cast<int>(input_row) : -1;
+    const int cursor_row = show_cursor && show_input ? static_cast<int>(input_row) : -1;
     const bool cursor_moved = cursor_col != cursor_col_ || cursor_row != cursor_row_;
 
     int first_row = rows_;
     int last_row = -1;
     for (int row = 0; row < rows_; ++row) {
         std::string line = buffer.lineAt(static_cast<size_t>(row));
-        if (static_cast<size_t>(row) == input_row) {
+        if (show_input && static_cast<size_t>(row) == input_row) {
             if (line.find(prompt_text) == std::string::npos) line += prompt_text;
             line += command_line;
         }
@@ -228,11 +242,11 @@ void TerminalView::render(const TerminalBuffer& buffer, const std::string& comma
     const size_t total = buffer.totalRows();
     const size_t max_offset = total > visible ? total - visible : 0;
     const size_t offset = buffer.scrollOffset();
-    // Repainted rows are cleared across the full width, which wipes the bar.
-    const bool bar_dirty = full || last_row >= 0 || offset != scroll_offset_ || total != scroll_total_;
-    if (bar_dirty) drawScrollbar(offset, max_offset, visible, total);
-    scroll_offset_ = offset;
-    scroll_total_ = total;
+    // The common font widths stop before the bar, so unchanged scrollbar
+    // geometry does not need a separate tall invalidation.
+    const bool cells_overlap_bar = columns_ * cell_w_ > width_ - kScrollbarW;
+    const bool bar_dirty = drawScrollbar(offset, max_offset, visible, total,
+                                         full || (last_row >= 0 && cells_overlap_bar));
 
     if (full) {
         full_redraw_ = false;
@@ -250,6 +264,7 @@ void TerminalView::renderVt(TerminalEmulator& vt, bool show_cursor, bool full) {
     // The emulator paints cells the CLI row cache knows nothing about, so the
     // next render() has to start from a clean slate.
     full_redraw_ = true;
+    full = full || vt.fullRedrawPending();
     const size_t cols = std::min(vt.columns(), static_cast<size_t>(columns_));
     const size_t rows = std::min(vt.rows(), static_cast<size_t>(rows_));
     if (full) {
@@ -291,14 +306,16 @@ void TerminalView::renderVt(TerminalEmulator& vt, bool show_cursor, bool full) {
         last_col = std::max(last_col, cursor_col);
         last_row = std::max(last_row, cursor_row);
     }
-    vt.clearDirty();
     const size_t visible = rows ? rows : 1;
     const size_t history = vt.scrollbackRows();
-    drawScrollbar(vt.scrollbackOffset(), history, visible, history + visible);
+    const bool cells_overlap_bar = last_col >= 0 && (last_col + 1) * cell_w_ > width_ - kScrollbarW;
+    const bool bar_dirty = drawScrollbar(vt.scrollbackOffset(), history, visible, history + visible,
+                                         full || cells_overlap_bar);
+    vt.clearDirty();
     if (full) invalidate();
     else {
         invalidateCells(first_col, first_row, last_col, last_row);
-        invalidateScrollbar();
+        if (bar_dirty) invalidateScrollbar();
     }
 }
 

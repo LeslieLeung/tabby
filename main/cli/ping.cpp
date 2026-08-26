@@ -29,6 +29,15 @@ void pingLine(PingState* state, const std::string& line) {
     state->lines.push_back(line);
 }
 
+void flushPingLines(Cli& cli, PingState* state) {
+    std::vector<std::string> lines;
+    {
+        const std::lock_guard<std::mutex> lock(state->mutex);
+        lines.swap(state->lines);
+    }
+    for (const auto& line : lines) cli.appendLine(line);
+}
+
 void onPingSuccess(esp_ping_handle_t hdl, void* args) {
     auto* state = static_cast<PingState*>(args);
     uint8_t ttl = 0;
@@ -138,6 +147,7 @@ bool runPing(Cli& cli, const CliArgs& args) {
     bool cancelled = false;
     for (;;) {
         const EventBits_t bits = xEventGroupWaitBits(state.done, 1, pdTRUE, pdFALSE, pdMS_TO_TICKS(50));
+        flushPingLines(cli, &state);
         if ((bits & 1) != 0) break;
         if (cli.interrupted()) {
             cancelled = true;
@@ -147,8 +157,8 @@ bool runPing(Cli& cli, const CliArgs& args) {
     }
     if (!cancelled) esp_ping_stop(ping);
     esp_ping_delete_session(ping);
+    flushPingLines(cli, &state);
     vEventGroupDelete(state.done);
-    for (const auto& line : state.lines) cli.appendLine(line);
     if (cancelled) cli.appendLine("^C");
     return true;
 }

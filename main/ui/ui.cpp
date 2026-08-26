@@ -39,13 +39,21 @@ constexpr int kHeaderPad = 8;
 // halving the stripe count halves that fixed per-object cost. The PSRAM
 // fallbacks trade latency for capacity.
 constexpr int kDrawRowsInternal = 64;
+constexpr int kDrawRowsInternalMid = 48;
 constexpr int kDrawRowsInternalMin = 32;
 constexpr int kDrawRowsPsram = 64;
 constexpr int kDrawRowsSingle = 96;
+// RGB565 PPA transfers are most reliable when the input and output blocks are
+// aligned to complete DMA macro blocks. This avoids the ESP32-P4 DIG-734
+// trailing-unit erratum without rejecting small dirty regions or peeling them
+// into CPU-rendered slivers. The display dimensions divide both values exactly.
+constexpr int kPpaRoundX = 64;
+constexpr int kPpaRoundY = 16;
 // The UI loop also drains the keyboard and the SSH socket, so it stays well
 // below the 16 ms refresh period instead of pacing frames itself.
 constexpr uint32_t kLoopDelayMs = 4;
 constexpr uint32_t kBoardPollMs = 8;
+constexpr uint32_t kTouchReadMs = 8;
 // Settings pages only refresh status text, which does not need to keep up with
 // the render loop and costs a lock plus a string copy per visible page.
 constexpr uint32_t kPagePollMs = 32;
@@ -138,12 +146,31 @@ uint32_t g_last_blink = 0;
 uint32_t g_last_status = 0;
 bool g_cursor_on = true;
 SettingsPage g_settings_page = SettingsPage::Wifi;
+std::string g_status_time_text;
+std::string g_status_wifi_text;
+std::string g_status_battery_text;
+uint32_t g_status_wifi_color = UINT32_MAX;
+uint32_t g_status_battery_color = UINT32_MAX;
+int8_t g_status_settings_open = -1;
 
 void rebuildSettings();
 void fillSettingsContent();
 void selectSettingsPage(SettingsPage page, bool animate);
 void showScreen(Screen screen);
 void applyTerminalFont(uint8_t height);
+
+void roundFlushArea(lv_disp_drv_t* driver, lv_area_t* area) {
+    // Once the accelerator has fallen back permanently, keep native LVGL dirty
+    // areas: the CPU path benefits more from moving fewer pixels than it does
+    // from macro-block alignment.
+    if (g_app == nullptr || !g_app->bsp.asyncFlushSupported()) return;
+    area->x1 = static_cast<lv_coord_t>((area->x1 / kPpaRoundX) * kPpaRoundX);
+    area->y1 = static_cast<lv_coord_t>((area->y1 / kPpaRoundY) * kPpaRoundY);
+    area->x2 = std::min<lv_coord_t>(
+        driver->hor_res - 1, static_cast<lv_coord_t>(((area->x2 + kPpaRoundX) / kPpaRoundX) * kPpaRoundX - 1));
+    area->y2 = std::min<lv_coord_t>(
+        driver->ver_res - 1, static_cast<lv_coord_t>(((area->y2 + kPpaRoundY) / kPpaRoundY) * kPpaRoundY - 1));
+}
 
 void flush(lv_disp_drv_t* driver, const lv_area_t* area, lv_color_t* colors) {
     const int width = area->x2 - area->x1 + 1;
@@ -217,38 +244,55 @@ const char* batterySymbol(int percent, bool charging) {
     return LV_SYMBOL_BATTERY_EMPTY;
 }
 
+void setLabelTextIfChanged(lv_obj_t* label, std::string& cached, const std::string& text) {
+    if (label == nullptr || cached == text) return;
+    cached = text;
+    lv_label_set_text(label, cached.c_str());
+}
+
+void setTextColorIfChanged(lv_obj_t* object, uint32_t& cached, uint32_t color) {
+    if (object == nullptr || cached == color) return;
+    cached = color;
+    lv_obj_set_style_text_color(object, lv_color_hex(color), 0);
+}
+
 void refreshStatusBar() {
     if (g_app == nullptr || g_time == nullptr) return;
 
-    lv_label_set_text(g_time, g_app->time.clockHm(g_app->config.system).c_str());
+    setLabelTextIfChanged(g_time, g_status_time_text, g_app->time.clockHm(g_app->config.system));
 
     if (g_app->wifi.connected()) {
-        lv_obj_set_style_text_color(g_wifi, lv_color_hex(kWifiOnRgb), 0);
-        lv_label_set_text(g_wifi, LV_SYMBOL_WIFI);
+        setTextColorIfChanged(g_wifi, g_status_wifi_color, kWifiOnRgb);
+        setLabelTextIfChanged(g_wifi, g_status_wifi_text, LV_SYMBOL_WIFI);
     } else if (!g_app->wifi.enabled()) {
-        lv_obj_set_style_text_color(g_wifi, lv_color_hex(kMutedRgb), 0);
-        lv_label_set_text_fmt(g_wifi, "%s Off", LV_SYMBOL_WIFI);
+        setTextColorIfChanged(g_wifi, g_status_wifi_color, kMutedRgb);
+        setLabelTextIfChanged(g_wifi, g_status_wifi_text, LV_SYMBOL_WIFI " Off");
     } else {
-        lv_obj_set_style_text_color(g_wifi, lv_color_hex(kMutedRgb), 0);
-        lv_label_set_text_fmt(g_wifi, "%s --", LV_SYMBOL_WIFI);
+        setTextColorIfChanged(g_wifi, g_status_wifi_color, kMutedRgb);
+        setLabelTextIfChanged(g_wifi, g_status_wifi_text, LV_SYMBOL_WIFI " --");
     }
 
     if (!g_app->bsp.batteryPresent()) {
-        lv_obj_set_style_text_color(g_battery, lv_color_hex(kMutedRgb), 0);
-        lv_label_set_text(g_battery, LV_SYMBOL_BATTERY_EMPTY " n/a");
+        setTextColorIfChanged(g_battery, g_status_battery_color, kMutedRgb);
+        setLabelTextIfChanged(g_battery, g_status_battery_text, LV_SYMBOL_BATTERY_EMPTY " n/a");
     } else {
         const int percent = g_app->bsp.batteryPercent();
         const bool charging = g_app->bsp.batteryCharging();
         uint32_t color = kTextRgb;
         if (charging) color = kChargeRgb;
         else if (percent <= 15) color = kLowBattRgb;
-        lv_obj_set_style_text_color(g_battery, lv_color_hex(color), 0);
-        lv_label_set_text_fmt(g_battery, "%s %d%%", batterySymbol(percent, charging), percent);
+        setTextColorIfChanged(g_battery, g_status_battery_color, color);
+        char text[32];
+        std::snprintf(text, sizeof(text), "%s %d%%", batterySymbol(percent, charging), percent);
+        setLabelTextIfChanged(g_battery, g_status_battery_text, text);
     }
 
     if (g_settings_btn != nullptr) {
         const bool open = g_app->screen == Screen::Settings;
-        lv_obj_set_style_bg_color(g_settings_btn, lv_color_hex(open ? kAccentRgb : kCardRgb), 0);
+        if (g_status_settings_open != static_cast<int8_t>(open)) {
+            g_status_settings_open = static_cast<int8_t>(open);
+            lv_obj_set_style_bg_color(g_settings_btn, lv_color_hex(open ? kAccentRgb : kCardRgb), 0);
+        }
     }
 }
 
@@ -622,6 +666,7 @@ void handleAction(const KeyAction& action) {
         applyTerminalScroll(action.text == "\x1B[5~" ? kTerminalScrollPage : -kTerminalScrollPage);
         return;
     }
+    if (g_app->cli.busy()) return;
     g_app->terminal.scrollToBottom();
     if (action.text == "\x1B[A" || action.text == "\x1B[B") {
         navigateCommandHistory(action.text == "\x1B[A");
@@ -874,22 +919,30 @@ void createWidgets(int width, int height) {
 int allocateDrawBuffers(int width) {
     struct Attempt {
         int rows;
-        uint32_t caps;
+        uint32_t first_caps;
+        uint32_t second_caps;
         bool paired;
     };
     const Attempt attempts[] = {
-        {kDrawRowsInternal, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, true},
-        {kDrawRowsInternalMin, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, true},
-        {kDrawRowsPsram, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, true},
-        {kDrawRowsSingle, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, false},
-        {kDrawRowsInternalMin, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, false},
+        {kDrawRowsInternal, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, true},
+        {kDrawRowsInternalMid, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT,
+         MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, true},
+        // If only one 64-row block fits internally, retain it and place the
+        // other in PSRAM. This uses the same amount of scarce SRAM as two
+        // 32-row buffers while halving LVGL's stripe/object traversal count.
+        {kDrawRowsInternal, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, true},
+        {kDrawRowsInternalMin, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT,
+         MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, true},
+        {kDrawRowsPsram, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, true},
+        {kDrawRowsSingle, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, 0, false},
+        {kDrawRowsInternalMin, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, 0, false},
     };
     for (const Attempt& attempt : attempts) {
         const size_t bytes = static_cast<size_t>(width) * attempt.rows * sizeof(lv_color_t);
-        g_pixels = static_cast<lv_color_t*>(heap_caps_malloc(bytes, attempt.caps));
+        g_pixels = static_cast<lv_color_t*>(heap_caps_malloc(bytes, attempt.first_caps));
         if (g_pixels == nullptr) continue;
         if (!attempt.paired) return attempt.rows;
-        g_pixels_alt = static_cast<lv_color_t*>(heap_caps_malloc(bytes, attempt.caps));
+        g_pixels_alt = static_cast<lv_color_t*>(heap_caps_malloc(bytes, attempt.second_caps));
         if (g_pixels_alt != nullptr) return attempt.rows;
         heap_caps_free(g_pixels);
         g_pixels = nullptr;
@@ -908,14 +961,20 @@ void uiTask(void*) {
         vTaskDelete(nullptr);
         return;
     }
-    ESP_LOGI(kTag, "LVGL draw buffers: %d x %d rows, %s", g_pixels_alt != nullptr ? 2 : 1, draw_rows,
-             esp_ptr_internal(g_pixels) ? "internal" : "psram");
+    const char* first_memory = esp_ptr_internal(g_pixels) ? "internal" : "psram";
+    const char* second_memory = g_pixels_alt == nullptr ? nullptr : (esp_ptr_internal(g_pixels_alt) ? "internal" : "psram");
+    if (second_memory != nullptr) {
+        ESP_LOGI(kTag, "LVGL draw buffers: 2 x %d rows, %s/%s", draw_rows, first_memory, second_memory);
+    } else {
+        ESP_LOGI(kTag, "LVGL draw buffer: 1 x %d rows, %s", draw_rows, first_memory);
+    }
 
     lv_disp_draw_buf_init(&g_draw_buffer, g_pixels, g_pixels_alt, width * draw_rows);
     lv_disp_drv_init(&g_display_driver);
     g_display_driver.hor_res = width;
     g_display_driver.ver_res = height;
     g_display_driver.flush_cb = flush;
+    g_display_driver.rounder_cb = roundFlushArea;
     g_display_driver.monitor_cb = monitorRefresh;
     g_display_driver.draw_buf = &g_draw_buffer;
     if (g_pixels_alt != nullptr && g_app->bsp.asyncFlushSupported()) {
@@ -930,7 +989,10 @@ void uiTask(void*) {
     lv_indev_drv_init(&g_touch_driver);
     g_touch_driver.type = LV_INDEV_TYPE_POINTER;
     g_touch_driver.read_cb = touchRead;
-    lv_indev_drv_register(&g_touch_driver);
+    lv_indev_t* touch = lv_indev_drv_register(&g_touch_driver);
+    if (touch != nullptr && g_touch_driver.read_timer != nullptr) {
+        lv_timer_set_period(g_touch_driver.read_timer, kTouchReadMs);
+    }
 
     createWidgets(width, height);
     g_app->cli.appendLine("Tabby IDF + LVGL");
@@ -942,6 +1004,7 @@ void uiTask(void*) {
     uint32_t last_board_poll = last_tick;
     uint32_t last_page_poll = last_tick;
     uint32_t terminal_revision = g_app->terminal.revision();
+    bool last_cli_busy = g_app->cli.busy();
     Screen last_screen = g_app->screen;
     uint32_t last_beat = last_tick;
     uint32_t beat_loops = 0;
@@ -1009,6 +1072,11 @@ void uiTask(void*) {
         const uint32_t revision = g_app->terminal.revision();
         if (revision != terminal_revision) {
             terminal_revision = revision;
+            g_dirty = true;
+        }
+        const bool cli_busy = g_app->cli.busy();
+        if (cli_busy != last_cli_busy) {
+            last_cli_busy = cli_busy;
             g_dirty = true;
         }
         if (last_screen != g_app->screen) {
@@ -1087,7 +1155,8 @@ void uiTask(void*) {
                     g_ssh_full_redraw = false;
                 } else {
                     const std::string prompt = g_app->cli.prompt();
-                    g_terminal.render(g_app->terminal, g_command, g_cursor, g_cursor_on, prompt.c_str());
+                    g_terminal.render(g_app->terminal, g_command, g_cursor, g_cursor_on && !cli_busy, prompt.c_str(),
+                                      !cli_busy);
                 }
                 g_dirty = false;
             }

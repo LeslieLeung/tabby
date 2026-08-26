@@ -241,16 +241,17 @@ size_t TerminalEmulator::scrollbackRows() const
 
 void TerminalEmulator::markAllDirty()
 {
-    for (auto& cell : main_) cell.dirty = true;
-    for (auto& cell : alt_) cell.dirty = true;
-    for (auto& cell : scrollback_) cell.dirty = true;
+    full_redraw_pending_ = true;
 }
 
 void TerminalEmulator::clearDirty()
 {
-    for (auto& cell : main_) cell.dirty = false;
-    for (auto& cell : alt_) cell.dirty = false;
-    for (auto& cell : scrollback_) cell.dirty = false;
+    // Only the active grid was inspected by the renderer. Keeping the other
+    // grid untouched preserves its pending changes and halves the normal
+    // dirty-clear traffic.
+    auto& buffer = alternate_ ? alt_ : main_;
+    for (auto& cell : buffer) cell.dirty = false;
+    full_redraw_pending_ = false;
 }
 
 void TerminalEmulator::markCursorDirty()
@@ -461,7 +462,6 @@ void TerminalEmulator::pushScrollbackRow(size_t row)
     }
     Cell* dest = &scrollback_[scrollback_head_ * cols_];
     std::memcpy(dest, &buf[first], cols_ * sizeof(Cell));
-    for (size_t col = 0; col < cols_; ++col) dest[col].dirty = true;
     scrollback_head_ = (scrollback_head_ + 1) % max_scrollback_rows_;
     if (scrollback_count_ < max_scrollback_rows_) {
         ++scrollback_count_;

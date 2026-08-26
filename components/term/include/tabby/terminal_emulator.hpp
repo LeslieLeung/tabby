@@ -43,6 +43,7 @@ public:
     void markAllDirty();
     void markCursorDirty();
     void clearDirty();
+    bool fullRedrawPending() const { return full_redraw_pending_; }
 
 private:
     enum class State : uint8_t { Ground, Escape, Charset, Csi, Osc, Utf8 };
@@ -105,4 +106,8 @@ private:
     size_t scrollback_head_{0};
     size_t scrollback_count_{0};
     size_t max_scrollback_rows_{800};
+    // Scrolling the history changes which cells are visible without changing
+    // their per-cell dirty bits. A single flag is both more accurate and much
+    // cheaper than writing every cell in the PSRAM-backed scrollback ring.
+    bool full_redraw_pending_{true};
 };

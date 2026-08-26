@@ -17,7 +17,7 @@ public:
     bool create(lv_obj_t* parent, int x, int y, int width, int height);
     void configureFont(uint8_t line_step);
     void render(const TerminalBuffer& buffer, const std::string& command_line, size_t cursor, bool show_cursor,
-                const char* prompt);
+                const char* prompt, bool show_input = true);
     void renderVt(TerminalEmulator& vt, bool show_cursor, bool full = false);
     // Discards the row cache so the next render() repaints everything. Needed
     // whenever something else has drawn into the pixel buffer.
@@ -36,7 +36,7 @@ private:
     void clearRow(int row);
     void drawCursor(int col, int row, uint16_t color);
     void drawText(int col, int row, const std::string& text, uint16_t fg, uint16_t bg);
-    void drawScrollbar(size_t offset, size_t max_offset, size_t visible, size_t total);
+    bool drawScrollbar(size_t offset, size_t max_offset, size_t visible, size_t total, bool force);
     void invalidateCells(int first_col, int first_row, int last_col, int last_row);
     void invalidateScrollbar();
     uint16_t terminalColor(uint32_t color, bool bold) const;
@@ -55,8 +55,9 @@ private:
     std::vector<std::string> row_shadow_;
     int cursor_col_{-1};
     int cursor_row_{-1};
-    size_t scroll_offset_{0};
-    size_t scroll_total_{0};
+    int scrollbar_thumb_y_{-1};
+    int scrollbar_thumb_h_{-1};
+    bool scrollbar_track_visible_{false};
     bool full_redraw_{true};
 };
 

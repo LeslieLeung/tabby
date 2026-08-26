@@ -252,11 +252,19 @@ bool BoardBsp::displayFlush(int x, int y, int width, int height, const uint16_t*
 
 bool BoardBsp::displayFlushAsync(int x, int y, int width, int height, const uint16_t* pixels, bool last) {
     if (!ready_ || pixels == nullptr || width <= 0 || height <= 0) return false;
-    // Without a handler nothing would ever observe the completion.
+    // With two LVGL buffers, let the accelerator release the source from its
+    // completion interrupt so rendering can overlap the transfer.
     if (ppa_async_ && g_flush_done_handler != nullptr) {
         const BlitResult result = blitArea(x, y, width, height, pixels, true);
         if (result == BlitResult::InFlight) return true;
         if (result == BlitResult::Done) return false;
+    }
+    // A single-buffer LVGL fallback has no completion handler, but PPA is still
+    // substantially faster than rotating the area through M5GFX on the CPU.
+    // Run it synchronously so the caller can immediately reuse its only buffer.
+    if (ppa_ready_ && g_flush_done_handler == nullptr &&
+        blitArea(x, y, width, height, pixels, false) != BlitResult::Failed) {
+        return false;
     }
     // One PPA attempt per flush: whatever made the accelerator reject this
     // area (unsafe geometry, exhausted transaction pool) rejects a retry the
@@ -272,7 +280,6 @@ BoardBsp::BlitResult BoardBsp::blitArea(int x, int y, int width, int height, con
         ESP_LOGE(kTag, "Invalid display flush area (%d,%d %dx%d)", x, y, width, height);
         return BlitResult::Failed;
     }
-
     // A width that leaves only a few pixels past a multiple of kPpaWidthUnit can
     // never clear the geometry rule, no matter how the rows are cut, because
     // w_left stays tiny. Peeling that remainder off as its own column restores
