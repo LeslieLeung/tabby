@@ -194,4 +194,29 @@ void CjkFontInit() {
 
 lv_font_t* CjkFont16() { return &g_cn.font; }
 
+bool CjkFontGlyph(uint32_t letter, uint8_t bitmap[32]) {
+    if (bitmap == nullptr || letter == 0 || letter > 0xFFFF) return false;
+    lv_font_glyph_dsc_t dsc{};
+    uint8_t raw[kBitmapBytes];
+    bool ok = false;
+    if (g_cn.data != nullptr) ok = decodeGlyph(g_cn.data, letter, &dsc, raw);
+    if (!ok && g_tw.data != nullptr) ok = decodeGlyph(g_tw.data, letter, &dsc, raw);
+    if (!ok) return false;
+    std::memset(bitmap, 0, 32);
+    if (dsc.box_w == 0 || dsc.box_h == 0) return true;
+    const uint32_t src_w = dsc.box_w;
+    const uint32_t src_h = dsc.box_h;
+    for (int y = 0; y < 16; ++y) {
+        const uint32_t sy = static_cast<uint32_t>(y) * src_h / 16;
+        for (int x = 0; x < 16; ++x) {
+            const uint32_t sx = static_cast<uint32_t>(x) * src_w / 16;
+            const uint32_t bit = sy * src_w + sx;
+            if ((raw[bit >> 3] & static_cast<uint8_t>(0x80 >> (bit & 7))) == 0) continue;
+            const uint32_t out = static_cast<uint32_t>(y * 16 + x);
+            bitmap[out >> 3] |= static_cast<uint8_t>(0x80 >> (out & 7));
+        }
+    }
+    return true;
+}
+
 }  // namespace tabby

@@ -1,5 +1,6 @@
 #include "terminal_view.hpp"
 
+#include "cjk_term_font.hpp"
 #include "tabby/utf8.hpp"
 
 #include "esp_heap_caps.h"
@@ -88,6 +89,48 @@ void TerminalView::drawCursor(int col, int row, uint16_t color) {
     }
 }
 
+void TerminalView::drawTofu(int x, int y, int w, int h, uint16_t color) {
+    if (pixels_ == nullptr || w < 3 || h < 3) return;
+    const int x0 = std::max(0, x + 1);
+    const int y0 = std::max(0, y + 1);
+    const int x1 = std::min(width_ - 1, x + w - 2);
+    const int y1 = std::min(height_ - 1, y + h - 2);
+    if (x1 < x0 || y1 < y0) return;
+    for (int px = x0; px <= x1; ++px) {
+        pixels_[y0 * width_ + px] = color;
+        pixels_[y1 * width_ + px] = color;
+    }
+    for (int py = y0; py <= y1; ++py) {
+        pixels_[py * width_ + x0] = color;
+        pixels_[py * width_ + x1] = color;
+    }
+}
+
+void TerminalView::drawCodepoint(int col, int row, uint32_t cp, int cells, uint16_t fg) {
+    const int x = col * cell_w_;
+    const int y = row * cell_h_;
+    if (font_ != nullptr && TerminusBitmap::drawGlyph(pixels_, width_, width_, height_, *font_, cp, x, y, fg)) {
+        return;
+    }
+    const int dst_w = std::max(1, cells) * cell_w_;
+    if (CjkTermFont::drawGlyph(pixels_, width_, width_, height_, cp, x, y, dst_w, cell_h_, fg)) return;
+    if (cells > 1) drawTofu(x, y, dst_w, cell_h_, fg);
+}
+
+void TerminalView::drawText(int col, int row, const std::string& text, uint16_t fg, uint16_t bg) {
+    size_t i = 0;
+    int xcol = col;
+    while (i < text.size() && xcol < columns_) {
+        const uint32_t cp = utf8Next(text, i);
+        const int width = static_cast<int>(utf8Width(cp));
+        fillCell(xcol, row, bg);
+        if (width > 1 && xcol + 1 < columns_) fillCell(xcol + 1, row, bg);
+        const int cells = std::min(width, columns_ - xcol);
+        drawCodepoint(xcol, row, cp, std::max(1, cells), fg);
+        xcol += width;
+    }
+}
+
 uint16_t TerminalView::terminalColor(uint32_t color, bool bold) const {
     static const uint16_t kAnsi[16] = {
         0x0000, 0xA800, 0x0540, 0xAAA0, 0x0015, 0xA815, 0x0555, 0xAD55,
@@ -146,22 +189,6 @@ bool TerminalView::drawScrollbar(size_t offset, size_t max_offset, size_t visibl
         std::fill(line, line + kScrollbarW, kThumb);
     }
     return true;
-}
-
-void TerminalView::drawText(int col, int row, const std::string& text, uint16_t fg, uint16_t bg) {
-    size_t i = 0;
-    int xcol = col;
-    while (i < text.size() && xcol < columns_) {
-        const uint32_t cp = utf8Next(text, i);
-        const int width = static_cast<int>(utf8Width(cp));
-        fillCell(xcol, row, bg);
-        if (width > 1 && xcol + 1 < columns_) fillCell(xcol + 1, row, bg);
-        if (font_ != nullptr) {
-            TerminusBitmap::drawGlyph(pixels_, width_, width_, height_, *font_, cp, xcol * cell_w_, row * cell_h_,
-                                      fg);
-        }
-        xcol += width;
-    }
 }
 
 void TerminalView::invalidate() {
@@ -278,7 +305,12 @@ void TerminalView::renderVt(TerminalEmulator& vt, bool show_cursor, bool full) {
     for (size_t row = 0; row < rows; ++row) {
         for (size_t col = 0; col < cols; ++col) {
             const auto& cell = vt.displayCell(col, row);
-            if (!full && !cell.dirty) continue;
+            if (cell.continuation) continue;
+            const int cells = cell.wide && col + 1 < cols ? 2 : 1;
+            if (!full && !cell.dirty &&
+                !(cells == 2 && vt.displayCell(col + 1, row).dirty)) {
+                continue;
+            }
 
             uint32_t fg = cell.fg;
             uint32_t bg = cell.bg;
@@ -286,14 +318,12 @@ void TerminalView::renderVt(TerminalEmulator& vt, bool show_cursor, bool full) {
             const uint16_t fg16 = terminalColor(fg, cell.bold);
             const uint16_t bg16 = terminalColor(bg, false);
             fillCell(static_cast<int>(col), static_cast<int>(row), bg16);
-            uint32_t cp = cell.cp ? cell.cp : ' ';
-            if (font_) {
-                TerminusBitmap::drawGlyph(pixels_, width_, width_, height_, *font_, cp,
-                                          static_cast<int>(col) * cell_w_, static_cast<int>(row) * cell_h_, fg16);
-            }
+            if (cells == 2) fillCell(static_cast<int>(col) + 1, static_cast<int>(row), bg16);
+            const uint32_t cp = cell.cp ? cell.cp : ' ';
+            drawCodepoint(static_cast<int>(col), static_cast<int>(row), cp, cells, fg16);
             first_col = std::min(first_col, static_cast<int>(col));
             first_row = std::min(first_row, static_cast<int>(row));
-            last_col = std::max(last_col, static_cast<int>(col));
+            last_col = std::max(last_col, static_cast<int>(col) + cells - 1);
             last_row = std::max(last_row, static_cast<int>(row));
         }
     }

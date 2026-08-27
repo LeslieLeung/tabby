@@ -9,6 +9,10 @@ dependencies:
   espressif/esp_hosted: "1.4.0"
   espressif/esp_wifi_remote: "0.8.5"
   espressif/usb_host_hid: "^1.1.0"
+  espressif/usb_host_cdc_acm: "^2.0.0"
+  espressif/usb_host_ch34x_vcp: "^2.0.0"
+  espressif/usb_host_cp210x_vcp: "^2.0.0"
+  espressif/usb_host_ftdi_vcp: "^2.0.0"
   espressif/esp_tinyusb: "^2.0.0"
   # Local copy: upstream CMakeLists comments out scp.c; we keep it enabled.
   david-cermak/libssh:

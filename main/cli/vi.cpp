@@ -19,6 +19,10 @@ bool runVi(Cli& cli, const CliArgs& args) {
         cli.appendLine("vi: disconnect SSH first");
         return true;
     }
+    if (cli.serial() && cli.serial()->connected()) {
+        cli.appendLine("vi: close USB serial first");
+        return true;
+    }
     if (cli.python() && cli.python()->running()) {
         cli.appendLine("vi: python is running");
         return true;

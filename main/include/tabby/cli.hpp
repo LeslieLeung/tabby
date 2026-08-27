@@ -11,6 +11,7 @@
 #include "tabby/terminal_buffer.hpp"
 #include "tabby/time_sync.hpp"
 #include "tabby/usb_msc.hpp"
+#include "tabby/usb_serial.hpp"
 #include "tabby/vi_editor.hpp"
 #include "tabby/wifi_station.hpp"
 
@@ -25,7 +26,7 @@ class Cli {
 public:
     void attach(AppConfig* config, SettingsStore* settings, WifiStation* wifi, SshClient* ssh, PythonRunner* python,
                 TerminalBuffer* terminal, SdCard* sd, TimeSync* time_sync, ViEditor* editor, BoardBsp* bsp,
-                KeyboardInput* keyboard, UsbMsc* usb_msc);
+                KeyboardInput* keyboard, UsbMsc* usb_msc, UsbSerial* serial);
     void appendLine(const std::string& line);
     void appendText(const std::string& text);
     bool execute(const std::string& line);
@@ -37,6 +38,8 @@ public:
     bool interrupted() const { return interrupt_.load(std::memory_order_acquire); }
     void markSshSessionStart() { ssh_session_start_.store(true, std::memory_order_release); }
     bool takeSshSessionStart() { return ssh_session_start_.exchange(false, std::memory_order_acq_rel); }
+    void markSerialSessionStart() { serial_session_start_.store(true, std::memory_order_release); }
+    bool takeSerialSessionStart() { return serial_session_start_.exchange(false, std::memory_order_acq_rel); }
     std::string prompt() const;
     const CliRegistry& registry() const { return registry_; }
     const std::atomic<bool>* interruptFlag() const { return &interrupt_; }
@@ -53,6 +56,7 @@ public:
     BoardBsp* bsp() { return bsp_; }
     KeyboardInput* keyboard() { return keyboard_; }
     UsbMsc* usb() { return usb_; }
+    UsbSerial* serial() { return serial_; }
 
     void inheritCredentials(SshProfile& profile) const;
 
@@ -75,12 +79,14 @@ private:
     BoardBsp* bsp_{nullptr};
     KeyboardInput* keyboard_{nullptr};
     UsbMsc* usb_{nullptr};
+    UsbSerial* serial_{nullptr};
     void* command_queue_{nullptr};
     mutable std::mutex history_mutex_;
     std::vector<std::string> history_;
     static constexpr size_t kHistoryLimit = 64;
     std::atomic<bool> python_repl_{false};
     std::atomic<bool> ssh_session_start_{false};
+    std::atomic<bool> serial_session_start_{false};
     std::atomic<bool> busy_{false};
     std::atomic<bool> interrupt_{false};
 };

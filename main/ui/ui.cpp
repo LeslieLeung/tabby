@@ -2,6 +2,8 @@
 #include "tabby/python_gfx.hpp"
 #include "tabby/utf8.hpp"
 #include "appearance_page.hpp"
+#include "boot_splash.hpp"
+#include "cjk_term_font.hpp"
 #include "sd_page.hpp"
 #include "ssh_page.hpp"
 #include "system_page.hpp"
@@ -49,8 +51,8 @@ constexpr int kDrawRowsSingle = 96;
 // into CPU-rendered slivers. The display dimensions divide both values exactly.
 constexpr int kPpaRoundX = 64;
 constexpr int kPpaRoundY = 16;
-// The UI loop also drains the keyboard and the SSH socket, so it stays well
-// below the 16 ms refresh period instead of pacing frames itself.
+// The UI loop also drains the keyboard, SSH socket, and USB serial, so it
+// stays well below the 16 ms refresh period instead of pacing frames itself.
 constexpr uint32_t kLoopDelayMs = 4;
 constexpr uint32_t kBoardPollMs = 8;
 constexpr uint32_t kTouchReadMs = 8;
@@ -513,6 +515,19 @@ void resetHistoryNavigation() {
 
 int pageLines() { return std::max(1, g_terminal.rows() - 1); }
 
+bool serialLive() { return g_app != nullptr && g_app->serial.connected(); }
+
+bool sshLive() { return g_app != nullptr && g_app->ssh.connected(); }
+
+bool vtLive() { return sshLive() || serialLive(); }
+
+void closeSerialSession(const char* reason) {
+    if (g_app == nullptr) return;
+    g_app->serial.disconnect();
+    if (reason != nullptr && reason[0] != '\0') g_app->cli.appendLine(reason);
+    g_dirty = true;
+}
+
 int resolveScrollDelta(int value) {
     if (value >= kTerminalScrollPage) return pageLines();
     if (value <= -kTerminalScrollPage) return -pageLines();
@@ -524,7 +539,7 @@ void applyTerminalScroll(int delta) {
     if (pythonGfx().active() || g_app->editor.active()) return;
     delta = resolveScrollDelta(delta);
     if (delta == 0) return;
-    if (g_app->ssh.connected()) g_app->vt.scrollback(delta);
+    if (vtLive()) g_app->vt.scrollback(delta);
     else g_app->terminal.scroll(delta);
     g_dirty = true;
 }
@@ -587,12 +602,17 @@ void navigateCommandHistory(bool older) {
 }
 
 void handleAction(const KeyAction& action) {
+    if (BootSplashVisible()) return;
     if (action.type == KeyActionType::Menu) {
         if (g_app->screen == Screen::Settings && wifi_ui::handleKey(action)) return;
         if (g_app->screen == Screen::Settings && ssh_ui::handleKey(action)) return;
         if (g_app->screen == Screen::Settings && sd_ui::handleKey(action)) return;
         if (g_app->screen == Screen::Settings) {
             settingsBack();
+            return;
+        }
+        if (serialLive()) {
+            closeSerialSession("USB serial closed");
             return;
         }
         if (g_app->ssh.connected() || g_app->editor.active()) {
@@ -630,6 +650,23 @@ void handleAction(const KeyAction& action) {
             g_app->python.requestInterrupt();
             return;
         }
+    }
+    if (serialLive()) {
+        if (action.text == "\x1B" || ctrl_c) {
+            closeSerialSession("USB serial closed");
+            return;
+        }
+        g_app->vt.scrollbackToBottom();
+        std::string payload = action.text;
+        for (char& c : payload) {
+            if (c == '\n') c = '\r';
+        }
+        if (!g_app->serial.write(reinterpret_cast<const uint8_t*>(payload.data()), payload.size())) {
+            ESP_LOGW(kTag, "serial write dropped %u bytes", static_cast<unsigned>(payload.size()));
+        }
+        g_app->vt.markCursorDirty();
+        g_dirty = true;
+        return;
     }
     if (g_app->ssh.connected()) {
         g_app->vt.scrollbackToBottom();
@@ -995,6 +1032,7 @@ void uiTask(void*) {
     }
 
     createWidgets(width, height);
+    BootSplashCreateUi();
     g_app->cli.appendLine("Tabby IDF + LVGL");
     g_app->cli.appendLine(g_app->keyboard.status());
     g_app->cli.appendLine("type 'help' for commands");
@@ -1051,10 +1089,17 @@ void uiTask(void*) {
             handleAction(g_app->keyboard.read());
         }
 
+        if (BootSplashPoll()) {
+            g_terminal.markFullRedraw();
+            if (vtLive() || g_app->editor.active()) g_app->vt.markAllDirty();
+            g_ssh_full_redraw = true;
+            g_dirty = true;
+        }
+
         if (now - g_last_blink > 500) {
             g_last_blink = now;
             g_cursor_on = !g_cursor_on;
-            if (g_app->ssh.connected() || g_app->editor.active()) g_app->vt.markCursorDirty();
+            if (vtLive() || g_app->editor.active()) g_app->vt.markCursorDirty();
             g_dirty = true;
         }
         if (now - g_last_status > 1000) {
@@ -1068,6 +1113,13 @@ void uiTask(void*) {
             time_ui::poll();
             sd_ui::poll();
             system_ui::poll();
+            CjkTermFont::tryLoadFromSd();
+            if (CjkTermFont::takeNewlyLoaded()) {
+                g_terminal.markFullRedraw();
+                if (vtLive() || g_app->editor.active()) g_app->vt.markAllDirty();
+                g_ssh_full_redraw = true;
+                g_dirty = true;
+            }
         }
         const uint32_t revision = g_app->terminal.revision();
         if (revision != terminal_revision) {
@@ -1088,6 +1140,16 @@ void uiTask(void*) {
             g_app->vt.resize(static_cast<size_t>(g_terminal.columns()), static_cast<size_t>(g_terminal.rows()));
             g_app->vt.markAllDirty();
             g_app->ssh.resizePty(g_terminal.columns(), g_terminal.rows());
+            g_command.clear();
+            g_cursor = 0;
+            resetHistoryNavigation();
+            g_ssh_full_redraw = true;
+            g_dirty = true;
+        }
+        if (g_app->cli.takeSerialSessionStart() && g_app->serial.connected()) {
+            g_app->vt.reset();
+            g_app->vt.resize(static_cast<size_t>(g_terminal.columns()), static_cast<size_t>(g_terminal.rows()));
+            g_app->vt.markAllDirty();
             g_command.clear();
             g_cursor = 0;
             resetHistoryNavigation();
@@ -1121,6 +1183,24 @@ void uiTask(void*) {
                 }
                 break;
             }
+        } else if (g_app->serial.connected() && !g_app->editor.active()) {
+            char buffer[512];
+            size_t consumed = 0;
+            constexpr size_t kMaxVtBytes = 2048;
+            for (int i = 0; i < 8 && consumed < kMaxVtBytes; ++i) {
+                const size_t want = std::min(sizeof(buffer), kMaxVtBytes - consumed);
+                const int n = g_app->serial.read(buffer, want);
+                if (n > 0) {
+                    g_app->vt.write(buffer, static_cast<size_t>(n));
+                    consumed += static_cast<size_t>(n);
+                    g_dirty = true;
+                    continue;
+                }
+                if (n < 0) {
+                    closeSerialSession("USB serial disconnected");
+                }
+                break;
+            }
         } else if (g_app->ssh.connected() && g_app->editor.active()) {
             char buffer[512];
             for (int i = 0; i < 4; ++i) {
@@ -1135,7 +1215,7 @@ void uiTask(void*) {
             pythonGfx().unlockFrame();
             g_python_painted = true;
         }
-        if (g_dirty && g_app->screen == Screen::Terminal) {
+        if (g_dirty && g_app->screen == Screen::Terminal && !BootSplashVisible()) {
             pythonGfx().lockFrame();
             if (!pythonGfx().active()) {
                 if (g_python_painted) {
@@ -1150,7 +1230,7 @@ void uiTask(void*) {
                     g_app->editor.paint(g_app->vt);
                     g_terminal.renderVt(g_app->vt, g_cursor_on, g_ssh_full_redraw);
                     g_ssh_full_redraw = false;
-                } else if (g_app->ssh.connected()) {
+                } else if (vtLive()) {
                     g_terminal.renderVt(g_app->vt, g_cursor_on, g_ssh_full_redraw);
                     g_ssh_full_redraw = false;
                 } else {

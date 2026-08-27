@@ -1,0 +1,25 @@
+# Pack the optional SD CJK font.
+# Tag releases also attach this file from firmware.yml; use this workflow to
+# rebuild the font without compiling firmware.
+
+name: cjk-font
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pack Unifont
+        run: python3 tools/pack_cjk_font.py -o cjk16.bin
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cjk16.bin
+          path: cjk16.bin
+          if-no-files-found: error

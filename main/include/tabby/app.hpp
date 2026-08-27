@@ -12,6 +12,7 @@
 #include "tabby/terminal_emulator.hpp"
 #include "tabby/time_sync.hpp"
 #include "tabby/usb_msc.hpp"
+#include "tabby/usb_serial.hpp"
 #include "tabby/vi_editor.hpp"
 #include "tabby/wifi_station.hpp"
 
@@ -32,6 +33,7 @@ struct App {
     KeyboardInput keyboard;
     SdCard sd;
     UsbMsc usb_msc;
+    UsbSerial serial;
     TimeSync time;
     TerminalBuffer terminal{2500};
     TerminalEmulator vt;

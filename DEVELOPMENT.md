@@ -43,6 +43,17 @@ idf.py build
 idf.py -p <PORT> flash monitor
 ```
 
+## CI and releases
+
+`.github/workflows/firmware.yml` builds on pull requests and `main` using [`espressif/esp-idf-ci-action`](https://github.com/espressif/esp-idf-ci-action) (`espressif/idf:v5.4.4`, target `esp32p4`). A `v*` tag also packs `cjk16.bin` and publishes a GitHub Release (merged flash image + split bins + font).
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Flash the merged asset with `esptool.py --chip esp32p4 -p <PORT> write_flash 0x0 tabby-v0.1.0-flash.bin`. Rebuild only the font with `.github/workflows/cjk-font.yml` (workflow_dispatch).
+
 `sdkconfig` is generated from `sdkconfig.defaults`; do not commit it. The lock file is `dependencies.lock.esp32p4`.
 
 The serial console is **USB Serial/JTAG** (`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG`). Avoid unnecessary DTR/RTS toggles in host tools; they can reset the board.
@@ -68,11 +79,12 @@ main/cli/             Individual CLI commands
 main/ui/              LVGL pages and terminal view
 main/input/           Tab5 I2C + USB HID mapping
 components/term/      VT emulator and terminal buffer
-components/fonts/     Terminus bitmap fonts
+components/fonts/     Terminus bitmap fonts (terminal CJK uses efont + optional SD)
 components/settings/  AppConfig and LittleFS store
 components/libssh/    libssh ESP-IDF port (SCP enabled)
 components/micropython_embed/
 data/profiles.json    Factory profile template
+tools/pack_cjk_font.py Pack GNU Unifont into /fonts/cjk16.bin for SD
 sdkconfig.defaults    Board and performance Kconfig
 ```
 
@@ -108,7 +120,7 @@ There is no separate serial command protocol. Use the on-device CLI (`status`, `
 - **libssh override.** `main/idf_component.yml` points `override_path` at `components/libssh`. Upstream comments out SCP sources; the local CMake keeps them.
 - **MicroPython.** Scripts are capped at 64 KB. Interrupts are polled via `tabby_interrupt` at points such as `gfx.present()`.
 - **`vi`.** Mutually exclusive with SSH and a running Python job. Buffer cap is about 256 KB / 8000 lines.
-- Do not commit `sdkconfig`, `managed_components/`, `build/`, or profiles that contain real credentials.
+- Do not commit `sdkconfig`, `managed_components/`, `build/`, `*.bin` font packs, or profiles that contain real credentials.
 
 ## Not ported / known gaps
 
@@ -116,4 +128,3 @@ There is no separate serial command protocol. Use the on-device CLI (`status`, `
 - SSH public-key / key-file login (password only)
 - CLI pipelines, redirection, job control
 - On-device Tailscale node
-- Terminal bitmap fonts have no CJK; Chinese appears only in the LVGL settings pages (efont)

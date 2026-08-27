@@ -18,7 +18,7 @@ Build, layout, and internals: [DEVELOPMENT.md](DEVELOPMENT.md).
 - **On-device `vi`**: modal text editor for SD files (not a full Vim)
 - **MicroPython**: REPL, `python -c`, scripts from SD; a global `gfx` object draws to a full-screen canvas
 - **Time**: on-demand NTP, manual UTC offset, optional public-IP timezone detection, written back to the RTC
-- **Display**: Terminus bitmap fonts (20–36 px), CJK in the settings UI (Simplified / Traditional), PPA-accelerated flushes, adjustable brightness
+- **Display**: Terminus bitmap fonts (20–36 px) for ASCII; CJK in SSH/serial/CLI from firmware efont, or a fuller bitmap on microSD; CJK in the settings UI (Simplified / Traditional); PPA-accelerated flushes; adjustable brightness
 
 Not ported yet: BLE HID keyboards and SSH public-key login. The firmware does not run a Tailscale node; to reach a tailnet host, put the Tab5 on a network that already has a subnet router or gateway.
 
@@ -32,7 +32,17 @@ Not ported yet: BLE HID keyboards and SSH public-key login. The firmware does no
 
 ## Quick start
 
-### 1. Build and flash
+### 1. Flash a release (easiest)
+
+GitHub Actions builds ESP-IDF **5.4.4** firmware for **esp32p4** on each `v*` tag. Download `tabby-*-flash.bin` from [Releases](https://github.com/LeslieLeung/tabby/releases/latest) and write the whole image at offset `0x0`:
+
+```bash
+esptool.py --chip esp32p4 -p /dev/cu.usbmodem* write_flash 0x0 tabby-*-flash.bin
+```
+
+Replace the port with the Tab5 USB Serial/JTAG device. Optional CJK font: `cjk16.bin` on the same release, copied to `/fonts/cjk16.bin` on the microSD card.
+
+### 2. Build from source
 
 ESP-IDF **5.4.4** is required (M5Unified / M5GFX do not support IDF 6.x yet). Use [eim](https://github.com/espressif/idf-im-cli) or `export.sh`; full steps are in [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -46,7 +56,7 @@ eim run "idf.py -p /dev/cu.usbmodem* flash monitor" v5.4.4
 
 Replace `/dev/cu.usbmodem*` with the actual port. On macOS / Linux that is often `cu.usbmodem*` or `ttyACM*`.
 
-### 2. First use
+### 3. First use
 
 1. Reboot the Tab5 after flashing.
 2. Press **Esc** to open settings (during an SSH session or `vi`, Esc is sent to the remote app / editor).
@@ -119,6 +129,25 @@ sd usb on
 
 Plain `ls` uses multi-column output; `ls -l` prints one file per line. SD commands are unavailable when no card is inserted.
 
+### Terminal CJK
+
+ASCII, box drawing, and powerline stay on the built-in Terminus font. Chinese (and other wide characters) are drawn from:
+
+1. **Firmware efont** (same Simplified/Traditional face as the settings UI). Enough for typical `ls` names, `vim`, and SSH output. No SD card required.
+2. **Optional SD font** for more glyphs (Japanese, Korean, rarer CJK). The packed bitmap is **not** in git (~1.4 MB, generated from [GNU Unifont](https://unifoundry.com/unifont/), SIL OFL 1.1). Get it one of these ways, then put it on the card as `/fonts/cjk16.bin` and reboot (or remount):
+
+| How | Command / URL |
+| --- | --- |
+| GitHub Release (preferred) | [latest `cjk16.bin`](https://github.com/LeslieLeung/tabby/releases/latest/download/cjk16.bin) |
+| On the device (Wi-Fi + SD) | `mkdir /fonts` then `wget https://github.com/LeslieLeung/tabby/releases/latest/download/cjk16.bin /fonts/cjk16.bin` |
+| Build it yourself | `python3 tools/pack_cjk_font.py -o cjk16.bin` |
+
+Copy via a card reader, or `sd usb on` and drop the file from a computer. A `v*` tag runs `.github/workflows/firmware.yml`, which builds firmware, packs Unifont, and attaches `cjk16.bin` to the GitHub Release. Rebuild only the font with `.github/workflows/cjk-font.yml` (workflow_dispatch) and download the artifact.
+
+A raw Unifont `.hex` also works (`/fonts/unifont.hex` or `/unifont.hex`); it is slower to parse at boot. Prefer `cjk16.bin`.
+
+`status` prints `cjk=firmware efont` or `cjk=sd /fonts/cjk16.bin n=…`. Missing glyphs that the emulator treats as double-width render as an empty box.
+
 ### MicroPython and graphics
 
 ```text
@@ -148,4 +177,4 @@ gfx.present()
 
 Tabby is an ESP-IDF rewrite of [Tab5_SSH_Client](https://github.com/airpocket-soundman/Tab5_SSH_Client). Features and interaction follow that project closely. Thanks to [airpocket-soundman](https://github.com/airpocket-soundman).
 
-The display stack is [M5Unified](https://github.com/m5stack/M5Unified) / M5GFX and [LVGL](https://github.com/lvgl/lvgl). SSH/SCP uses the ESP-IDF port of [libssh](https://www.libssh.org/) (LGPL-2.1-or-later). Local Python is embedded MicroPython. Terminal glyphs come from Terminus.
+The display stack is [M5Unified](https://github.com/m5stack/M5Unified) / M5GFX and [LVGL](https://github.com/lvgl/lvgl). SSH/SCP uses the ESP-IDF port of [libssh](https://www.libssh.org/) (LGPL-2.1-or-later). Local Python is embedded MicroPython. Terminal ASCII comes from Terminus; CJK uses M5GFX efont and optional GNU Unifont on SD.

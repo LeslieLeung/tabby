@@ -22,6 +22,7 @@ void registerWifiCommand(CliRegistry& registry);
 void registerIpCommand(CliRegistry& registry);
 void registerPingCommand(CliRegistry& registry);
 void registerSshCommand(CliRegistry& registry);
+void registerSerialCommand(CliRegistry& registry);
 void registerScpCommand(CliRegistry& registry);
 void registerPythonCommand(CliRegistry& registry);
 void registerViCommand(CliRegistry& registry);
@@ -49,6 +50,7 @@ void registerBuiltinCommands(CliRegistry& registry) {
     registerIpCommand(registry);
     registerPingCommand(registry);
     registerSshCommand(registry);
+    registerSerialCommand(registry);
     registerScpCommand(registry);
     registerPythonCommand(registry);
     registerViCommand(registry);

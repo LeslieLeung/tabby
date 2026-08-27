@@ -13,7 +13,7 @@ namespace tabby {
 
 void Cli::attach(AppConfig* config, SettingsStore* settings, WifiStation* wifi, SshClient* ssh, PythonRunner* python,
                  TerminalBuffer* terminal, SdCard* sd, TimeSync* time_sync, ViEditor* editor, BoardBsp* bsp,
-                 KeyboardInput* keyboard, UsbMsc* usb_msc) {
+                 KeyboardInput* keyboard, UsbMsc* usb_msc, UsbSerial* serial) {
     config_ = config;
     settings_ = settings;
     wifi_ = wifi;
@@ -26,6 +26,7 @@ void Cli::attach(AppConfig* config, SettingsStore* settings, WifiStation* wifi, 
     bsp_ = bsp;
     keyboard_ = keyboard;
     usb_ = usb_msc;
+    serial_ = serial;
     if (registry_.commands().empty()) registerBuiltinCommands(registry_);
     startWorker();
 }

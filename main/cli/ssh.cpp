@@ -35,6 +35,10 @@ void helpSshDisconnect(Cli& cli) {
 }
 
 bool connectProfile(Cli& cli, size_t index) {
+    if (cli.serial() && cli.serial()->connected()) {
+        cli.appendLine("ssh: close USB serial first");
+        return true;
+    }
     if (cli.config() == nullptr || index >= cli.config()->ssh.size() || cli.ssh() == nullptr) {
         cli.appendLine("usage: ssh connect <index>");
         return true;
@@ -53,6 +57,10 @@ bool connectProfile(Cli& cli, size_t index) {
 }
 
 bool connectDirect(Cli& cli, std::string rest) {
+    if (cli.serial() && cli.serial()->connected()) {
+        cli.appendLine("ssh: close USB serial first");
+        return true;
+    }
     rest = trimCopy(std::move(rest));
     SshProfile profile;
     profile.port = 22;

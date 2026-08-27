@@ -403,6 +403,10 @@ void consumeConnectResult() {
 
 void connectProfile(size_t index) {
     if (g_app == nullptr || index >= g_app->config.ssh.size()) return;
+    if (g_app->serial.connected()) {
+        g_app->cli.appendLine("ssh: close USB serial first");
+        return;
+    }
     const auto profile = g_app->config.ssh[index];
     if (g_app->ssh.connected() && g_app->config.activeSsh == index) {
         g_app->screen = Screen::Terminal;

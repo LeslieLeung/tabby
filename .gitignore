@@ -6,3 +6,8 @@
 .scratch
 
 .DS_Store
+
+# Packed CJK font and Unifont downloads (see tools/pack_cjk_font.py)
+*.bin
+unifont*.hex
+unifont*.hex.gz

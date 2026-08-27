@@ -8,6 +8,7 @@ idf_component_register(
         "python_gfx.cpp"
         "sd_card.cpp"
         "usb_msc.cpp"
+        "usb_serial.cpp"
         "time_sync.cpp"
         "cli.cpp"
         "cli/util.cpp"
@@ -33,6 +34,7 @@ idf_component_register(
         "cli/ip.cpp"
         "cli/ping.cpp"
         "cli/ssh.cpp"
+        "cli/serial.cpp"
         "cli/scp.cpp"
         "cli/python.cpp"
         "cli/vi.cpp"
@@ -47,6 +49,8 @@ idf_component_register(
         "ui/appearance_page.cpp"
         "ui/system_page.cpp"
         "ui/cjk_font.cpp"
+        "ui/cjk_term_font.cpp"
+        "ui/boot_splash.cpp"
         "ui/terminal_view.cpp"
         "input/keyboard_mapper.cpp"
         "input/keyboard_input.cpp"
@@ -71,6 +75,10 @@ idf_component_register(
         sdmmc
         usb
         usb_host_hid
+        usb_host_cdc_acm
+        usb_host_ch34x_vcp
+        usb_host_cp210x_vcp
+        usb_host_ftdi_vcp
         esp_tinyusb
         esp_hosted
         libssh

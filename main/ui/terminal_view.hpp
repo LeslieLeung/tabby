@@ -35,6 +35,8 @@ private:
     void fillCell(int col, int row, uint16_t color);
     void clearRow(int row);
     void drawCursor(int col, int row, uint16_t color);
+    void drawTofu(int x, int y, int w, int h, uint16_t color);
+    void drawCodepoint(int col, int row, uint32_t cp, int cells, uint16_t fg);
     void drawText(int col, int row, const std::string& text, uint16_t fg, uint16_t bg);
     bool drawScrollbar(size_t offset, size_t max_offset, size_t visible, size_t total, bool force);
     void invalidateCells(int first_col, int first_row, int last_col, int last_row);

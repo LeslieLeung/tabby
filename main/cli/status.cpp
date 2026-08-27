@@ -1,15 +1,17 @@
 #include "tabby/cli.hpp"
 #include "tabby/cli/command.hpp"
 
+#include "cjk_term_font.hpp"
 #include "esp_heap_caps.h"
 
 #include <cstdio>
+#include <string>
 
 namespace tabby {
 namespace {
 
 void helpStatus(Cli& cli) {
-    cli.appendLine("status - Show device, Wi-Fi, SSH, SD and power status");
+    cli.appendLine("status - Show device, Wi-Fi, SSH, serial, SD and power status");
     cli.appendLine("Usage: status");
 }
 
@@ -22,6 +24,7 @@ bool runStatus(Cli& cli, const CliArgs&) {
     cli.appendLine(line);
     std::snprintf(line, sizeof(line), "ssh=%s", cli.ssh() && cli.ssh()->connected() ? "connected" : "disconnected");
     cli.appendLine(line);
+    if (cli.serial()) cli.appendLine(std::string("serial=") + cli.serial()->status());
     if (cli.sd()) {
         if (cli.sd()->usbMode()) cli.appendLine("sd=usb drive");
         else cli.appendLine(cli.sd()->ready() ? "sd=ready cwd=" + cli.sd()->cwd() : "sd=not present");
@@ -32,6 +35,7 @@ bool runStatus(Cli& cli, const CliArgs&) {
         else cli.appendLine("usb=off");
     }
     if (cli.keyboard()) cli.appendLine("keyboard=" + cli.keyboard()->status());
+    cli.appendLine(std::string("cjk=") + CjkTermFont::status());
     if (cli.bsp()) {
         if (!cli.bsp()->batteryPresent()) {
             cli.appendLine("battery=not present");
