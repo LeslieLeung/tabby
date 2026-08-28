@@ -9,7 +9,6 @@ Build, layout, and internals: [DEVELOPMENT.md](DEVELOPMENT.md).
 ## Features
 
 - **Interactive SSH**: password login, `xterm-256color` PTY, window-size updates; ANSI/VT handling for shells, `vim`, `nano`, and similar apps
-- **SCP**: copy files between an SSH host and the on-device microSD card
 - **Local CLI**: Linux-like commands (no pipes, redirection, or globbing) for Wi-Fi, SSH, SD, diagnostics, and Python
 - **VT emulator**: UTF-8, wide characters, alternate screen, ~2500-line scrollback
 - **Settings**: Wi-Fi, SSH, time, SD card, appearance, system; stored on LittleFS across reboots
@@ -20,13 +19,13 @@ Build, layout, and internals: [DEVELOPMENT.md](DEVELOPMENT.md).
 - **Time**: on-demand NTP, manual UTC offset, optional public-IP timezone detection, written back to the RTC
 - **Display**: Terminus bitmap fonts (20–36 px) for ASCII; CJK in SSH/serial/CLI from firmware efont, or a fuller bitmap on microSD; CJK in the settings UI (Simplified / Traditional); PPA-accelerated flushes; adjustable brightness
 
-Not ported yet: BLE HID keyboards and SSH public-key login. The firmware does not run a Tailscale node; to reach a tailnet host, put the Tab5 on a network that already has a subnet router or gateway.
+Not ported yet: BLE HID keyboards, SSH public-key login, and SCP. The firmware does not run a Tailscale node; to reach a tailnet host, put the Tab5 on a network that already has a subnet router or gateway.
 
 ## Hardware
 
 - [M5Stack Tab5](https://docs.m5stack.com/en/core/Tab5) (ESP32-P4, 16 MB flash, 32 MB PSRAM)
 - Tab5 Keyboard (ExtPort1, I2C `0x6D`, SDA=GPIO0, SCL=GPIO1)
-- microSD (optional; files, `vi`, Python scripts, SCP)
+- microSD (optional; files, `vi`, Python scripts)
 - USB cable (flashing, serial, USB keyboard, or USB-drive mode)
 - A Wi-Fi network the Tab5 can reach
 
@@ -116,8 +115,6 @@ ls -lah /
 cat /notes.txt
 vi /notes.txt
 df
-scp get /home/demo/test.py /test.py 0
-scp put /test.py /home/demo/test.py 0
 wget https://example.com/file.txt /file.txt
 python
 python -c print('hello')
@@ -177,4 +174,4 @@ gfx.present()
 
 Tabby is an ESP-IDF rewrite of [Tab5_SSH_Client](https://github.com/airpocket-soundman/Tab5_SSH_Client). Features and interaction follow that project closely. Thanks to [airpocket-soundman](https://github.com/airpocket-soundman).
 
-The display stack is [M5Unified](https://github.com/m5stack/M5Unified) / M5GFX and [LVGL](https://github.com/lvgl/lvgl). SSH/SCP uses the ESP-IDF port of [libssh](https://www.libssh.org/) (LGPL-2.1-or-later). Local Python is embedded MicroPython. Terminal ASCII comes from Terminus; CJK uses M5GFX efont and optional GNU Unifont on SD.
+The display stack is [M5Unified](https://github.com/m5stack/M5Unified) / M5GFX and [LVGL](https://github.com/lvgl/lvgl). SSH uses the ESP-IDF port of [libssh](https://www.libssh.org/) (LGPL-2.1-or-later). Local Python is embedded MicroPython. Terminal ASCII comes from Terminus; CJK uses M5GFX efont and optional GNU Unifont on SD.

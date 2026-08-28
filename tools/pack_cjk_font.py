@@ -8,7 +8,6 @@ The packed file is not committed. Distribute it as a GitHub Release asset
 
 Copy the output to the Tab5 microSD card as /fonts/cjk16.bin. A raw
 unifont.hex at /fonts/unifont.hex also works; the firmware parses it at mount.
-"""
 
 Format (little-endian):
   magic      4  "CJK1"

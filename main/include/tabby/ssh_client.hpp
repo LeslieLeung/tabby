@@ -23,10 +23,6 @@ public:
     void setPtyHint(int columns, int rows);
     int ptyColumns() const { return pty_cols_.load(std::memory_order_acquire); }
     int ptyRows() const { return pty_rows_.load(std::memory_order_acquire); }
-    bool scpDownload(const SshProfile& profile, const std::string& remote_path, const std::string& local_path,
-                     std::string& error, const std::atomic<bool>* abort = nullptr);
-    bool scpUpload(const SshProfile& profile, const std::string& local_path, const std::string& remote_path,
-                   std::string& error, const std::atomic<bool>* abort = nullptr);
 
 private:
     bool writePending(const uint8_t* data, size_t len, uint32_t generation);

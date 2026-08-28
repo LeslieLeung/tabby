@@ -35,7 +35,6 @@ idf_component_register(
         "cli/ping.cpp"
         "cli/ssh.cpp"
         "cli/serial.cpp"
-        "cli/scp.cpp"
         "cli/python.cpp"
         "cli/vi.cpp"
         "cli/sd.cpp"
@@ -81,7 +80,7 @@ idf_component_register(
         usb_host_ftdi_vcp
         esp_tinyusb
         esp_hosted
-        libssh
+        david-cermak__libssh
         bblanchon__arduinojson
         settings
         term

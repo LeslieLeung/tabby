@@ -10,7 +10,6 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -24,11 +23,6 @@ constexpr char kSshHome[] = "/littlefs";
 constexpr char kKnownHosts[] = "/littlefs/.ssh/known_hosts";
 constexpr size_t kRxCap = 32 * 1024;
 constexpr size_t kTxCap = 2048;
-constexpr uint64_t kMaxScpBytes = 32ull * 1024 * 1024;
-
-bool aborted(const std::atomic<bool>* abort) {
-    return abort != nullptr && abort->load(std::memory_order_acquire);
-}
 
 // RFC 4254 section 8 terminal-mode opcodes. Do not inherit the ESP-IDF
 // console's termios: its stdin is intentionally raw/no-echo, which would make
@@ -193,48 +187,6 @@ size_t ringPop(std::vector<uint8_t>& buf, size_t& r, size_t w, uint8_t* data, si
         r = (r + 1) % cap;
     }
     return got;
-}
-
-ssh_session openAuthSession(const SshProfile& profile, std::string& error) {
-    ensureLibssh();
-    ssh_session session = ssh_new();
-    if (session == nullptr) {
-        error = "ssh_new failed";
-        return nullptr;
-    }
-    applySessionOptions(session, profile);
-
-    if (ssh_connect(session) != SSH_OK) {
-        error = ssh_get_error(session);
-        ssh_free(session);
-        return nullptr;
-    }
-    if (!verifyHostKey(session, error)) {
-        ssh_disconnect(session);
-        ssh_free(session);
-        return nullptr;
-    }
-    if (ssh_userauth_password(session, nullptr, profile.password.c_str()) != SSH_AUTH_SUCCESS) {
-        error = ssh_get_error(session);
-        ssh_disconnect(session);
-        ssh_free(session);
-        return nullptr;
-    }
-    ssh_set_blocking(session, 1);
-    return session;
-}
-
-std::string basenameOf(const std::string& path) {
-    const auto slash = path.find_last_of('/');
-    if (slash == std::string::npos || slash + 1 >= path.size()) return path.empty() ? "upload.bin" : path;
-    return path.substr(slash + 1);
-}
-
-std::string dirnameOf(const std::string& path) {
-    const auto slash = path.find_last_of('/');
-    if (slash == std::string::npos) return ".";
-    if (slash == 0) return "/";
-    return path.substr(0, slash);
 }
 
 }  // namespace
@@ -537,153 +489,6 @@ bool SshClient::resizePty(int columns, int rows) {
     }
     ESP_LOGW(kTag, "resize pty %dx%d failed", columns, rows);
     return false;
-}
-
-bool SshClient::scpDownload(const SshProfile& profile, const std::string& remote_path, const std::string& local_path,
-                            std::string& error, const std::atomic<bool>* abort) {
-    ssh_session session = openAuthSession(profile, error);
-    if (session == nullptr) return false;
-    ssh_scp scp = ssh_scp_new(session, SSH_SCP_READ, remote_path.c_str());
-    if (scp == nullptr) {
-        error = ssh_get_error(session);
-        ssh_disconnect(session);
-        ssh_free(session);
-        return false;
-    }
-    bool ok = false;
-    if (ssh_scp_init(scp) != SSH_OK) {
-        error = ssh_get_error(session);
-    } else {
-        int request = ssh_scp_pull_request(scp);
-        if (request == SSH_SCP_REQUEST_WARNING) {
-            error = ssh_scp_request_get_warning(scp);
-        } else if (request != SSH_SCP_REQUEST_NEWFILE) {
-            error = "remote path is not a file";
-        } else {
-            uint64_t remaining = ssh_scp_request_get_size64(scp);
-            if (remaining > kMaxScpBytes) {
-                error = "file too large";
-                ssh_scp_deny_request(scp, "file too large");
-            } else if (aborted(abort)) {
-                error = "interrupted";
-                ssh_scp_deny_request(scp, "interrupted");
-            } else {
-                FILE* out = std::fopen(local_path.c_str(), "wb");
-                if (out == nullptr) {
-                    error = "cannot open local file: " + local_path;
-                    ssh_scp_deny_request(scp, "local file open failed");
-                } else if (ssh_scp_accept_request(scp) != SSH_OK) {
-                    error = ssh_get_error(session);
-                    std::fclose(out);
-                } else {
-                    uint8_t buffer[1024];
-                    size_t chunks = 0;
-                    ok = true;
-                    while (remaining > 0) {
-                        if (aborted(abort)) {
-                            error = "interrupted";
-                            ok = false;
-                            break;
-                        }
-                        const size_t want = remaining > sizeof(buffer) ? sizeof(buffer) : static_cast<size_t>(remaining);
-                        const int n = ssh_scp_read(scp, buffer, want);
-                        if (n <= 0) {
-                            error = ssh_get_error(session);
-                            ok = false;
-                            break;
-                        }
-                        if (std::fwrite(buffer, 1, static_cast<size_t>(n), out) != static_cast<size_t>(n)) {
-                            error = "local write failed";
-                            ok = false;
-                            break;
-                        }
-                        remaining -= static_cast<uint64_t>(n);
-                        if ((++chunks & 7u) == 0) vTaskDelay(pdMS_TO_TICKS(1));
-                    }
-                    std::fclose(out);
-                    if (!ok) std::remove(local_path.c_str());
-                }
-            }
-        }
-    }
-    ssh_scp_close(scp);
-    ssh_scp_free(scp);
-    ssh_disconnect(session);
-    ssh_free(session);
-    return ok;
-}
-
-bool SshClient::scpUpload(const SshProfile& profile, const std::string& local_path, const std::string& remote_path,
-                          std::string& error, const std::atomic<bool>* abort) {
-    FILE* in = std::fopen(local_path.c_str(), "rb");
-    if (in == nullptr) {
-        error = "cannot open local file: " + local_path;
-        return false;
-    }
-    std::fseek(in, 0, SEEK_END);
-    const long file_size = std::ftell(in);
-    std::fseek(in, 0, SEEK_SET);
-    if (file_size < 0) {
-        error = "cannot size local file";
-        std::fclose(in);
-        return false;
-    }
-    if (static_cast<uint64_t>(file_size) > kMaxScpBytes) {
-        error = "file too large";
-        std::fclose(in);
-        return false;
-    }
-    if (aborted(abort)) {
-        error = "interrupted";
-        std::fclose(in);
-        return false;
-    }
-    ssh_session session = openAuthSession(profile, error);
-    if (session == nullptr) {
-        std::fclose(in);
-        return false;
-    }
-    const std::string remote_dir = dirnameOf(remote_path);
-    const std::string remote_name = basenameOf(remote_path);
-    ssh_scp scp = ssh_scp_new(session, SSH_SCP_WRITE, remote_dir.c_str());
-    if (scp == nullptr) {
-        error = ssh_get_error(session);
-        std::fclose(in);
-        ssh_disconnect(session);
-        ssh_free(session);
-        return false;
-    }
-    bool ok = false;
-    if (ssh_scp_init(scp) != SSH_OK) {
-        error = ssh_get_error(session);
-    } else if (ssh_scp_push_file(scp, remote_name.c_str(), static_cast<size_t>(file_size), 0644) != SSH_OK) {
-        error = ssh_get_error(session);
-    } else {
-        uint8_t buffer[1024];
-        size_t chunks = 0;
-        ok = true;
-        while (!std::feof(in)) {
-            if (aborted(abort)) {
-                error = "interrupted";
-                ok = false;
-                break;
-            }
-            const size_t n = std::fread(buffer, 1, sizeof(buffer), in);
-            if (n == 0) break;
-            if (ssh_scp_write(scp, buffer, n) != SSH_OK) {
-                error = ssh_get_error(session);
-                ok = false;
-                break;
-            }
-            if ((++chunks & 7u) == 0) vTaskDelay(pdMS_TO_TICKS(1));
-        }
-    }
-    std::fclose(in);
-    ssh_scp_close(scp);
-    ssh_scp_free(scp);
-    ssh_disconnect(session);
-    ssh_free(session);
-    return ok;
 }
 
 }  // namespace tabby

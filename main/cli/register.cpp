@@ -23,7 +23,6 @@ void registerIpCommand(CliRegistry& registry);
 void registerPingCommand(CliRegistry& registry);
 void registerSshCommand(CliRegistry& registry);
 void registerSerialCommand(CliRegistry& registry);
-void registerScpCommand(CliRegistry& registry);
 void registerPythonCommand(CliRegistry& registry);
 void registerViCommand(CliRegistry& registry);
 void registerSdCommand(CliRegistry& registry);
@@ -51,7 +50,6 @@ void registerBuiltinCommands(CliRegistry& registry) {
     registerPingCommand(registry);
     registerSshCommand(registry);
     registerSerialCommand(registry);
-    registerScpCommand(registry);
     registerPythonCommand(registry);
     registerViCommand(registry);
     registerSdCommand(registry);

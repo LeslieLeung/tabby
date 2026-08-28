@@ -9,7 +9,6 @@ M5Stack Tab5 上的便携 SSH / CLI 终端。基于 **ESP-IDF**，显示与触�
 ## 功能
 
 - **交互式 SSH**：密码登录、`xterm-256color` PTY、窗口大小同步；ANSI/VT 终端可跑常见 shell、`vim`、`nano` 等
-- **SCP**：在 SSH 主机和本机 microSD 之间传文件
 - **本机 CLI**：类 Linux 命令集（无管道、重定向或通配展开），覆盖 Wi-Fi、SSH、SD、诊断和 Python
 - **VT 仿真**：UTF-8、宽字符、备用屏幕、回滚缓冲（约 2500 行）
 - **设置页**：Wi-Fi、SSH、时间、SD 卡、外观、系统；配置写入 LittleFS，重启保留
@@ -20,13 +19,13 @@ M5Stack Tab5 上的便携 SSH / CLI 终端。基于 **ESP-IDF**，显示与触�
 - **时间**：按需 NTP、手动 UTC 偏移、可选按公网 IP 探测时区，并写回 RTC
 - **显示**：Terminus 点阵字体（20–36 px）用于 ASCII；SSH/串口/CLI 中文走固件 efont，也可从 microSD 加载更全的点阵；设置页中文（简/繁）；PPA 加速刷屏；可调亮度
 
-尚未移植：BLE HID 键盘、SSH 公钥登录。设备本身也不跑 Tailscale；要连 tailnet 主机，请让 Tab5 走带 subnet router / 网关的网络。
+尚未移植：BLE HID 键盘、SSH 公钥登录、SCP。设备本身也不跑 Tailscale；要连 tailnet 主机，请让 Tab5 走带 subnet router / 网关的网络。
 
 ## 硬件
 
 - [M5Stack Tab5](https://docs.m5stack.com/zh_CN/core/Tab5)（ESP32-P4，16 MB flash，32 MB PSRAM）
 - Tab5 Keyboard（ExtPort1，I2C `0x6D`，SDA=GPIO0，SCL=GPIO1）
-- microSD（可选，用于文件、`vi`、Python 脚本、SCP）
+- microSD（可选，用于文件、`vi`、Python 脚本）
 - USB 线（烧录、串口、USB 键盘或 U 盘模式）
 - Tab5 能连上的 Wi-Fi 网络
 
@@ -116,8 +115,6 @@ ls -lah /
 cat /notes.txt
 vi /notes.txt
 df
-scp get /home/demo/test.py /test.py 0
-scp put /test.py /home/demo/test.py 0
 wget https://example.com/file.txt /file.txt
 python
 python -c print('hello')
@@ -177,4 +174,4 @@ gfx.present()
 
 Tabby 是 [Tab5_SSH_Client](https://github.com/airpocket-soundman/Tab5_SSH_Client) 的 ESP-IDF 重写，功能与交互大量参考该项目。感谢 [airpocket-soundman](https://github.com/airpocket-soundman)。
 
-显示栈基于 [M5Unified](https://github.com/m5stack/M5Unified) / M5GFX 与 [LVGL](https://github.com/lvgl/lvgl)。SSH/SCP 使用 [libssh](https://www.libssh.org/)（LGPL-2.1-or-later）的 ESP-IDF 移植。本机 Python 是嵌入式 MicroPython。终端 ASCII 来自 Terminus；中文用 M5GFX efont，也可在 SD 上放 GNU Unifont。
+显示栈基于 [M5Unified](https://github.com/m5stack/M5Unified) / M5GFX 与 [LVGL](https://github.com/lvgl/lvgl)。SSH 使用 [libssh](https://www.libssh.org/)（LGPL-2.1-or-later）的 ESP-IDF 移植。本机 Python 是嵌入式 MicroPython。终端 ASCII 来自 Terminus；中文用 M5GFX efont，也可在 SD 上放 GNU Unifont。

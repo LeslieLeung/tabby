@@ -19,9 +19,9 @@ Dependencies come from the IDF Component Manager (`main/idf_component.yml`):
 | `espressif/esp_hosted` + `esp_wifi_remote` | Wi-Fi station on the P4 |
 | `espressif/usb_host_hid` | USB keyboard |
 | `espressif/esp_tinyusb` | SD card as a USB flash drive (MSC gadget) |
-| `david-cermak/libssh` (`override_path`) | SSH / SCP; the local copy keeps `scp.c`, which upstream comments out |
+| `david-cermak/libssh` | SSH client |
 
-Local components under `components/`: `settings`, `term`, `fonts`, `micropython_embed`, `libssh`.
+Local components under `components/`: `settings`, `term`, `fonts`, `micropython_embed`.
 
 ## Build and flash
 
@@ -81,7 +81,6 @@ main/input/           Tab5 I2C + USB HID mapping
 components/term/      VT emulator and terminal buffer
 components/fonts/     Terminus bitmap fonts (terminal CJK uses efont + optional SD)
 components/settings/  AppConfig and LittleFS store
-components/libssh/    libssh ESP-IDF port (SCP enabled)
 components/micropython_embed/
 data/profiles.json    Factory profile template
 tools/pack_cjk_font.py Pack GNU Unifont into /fonts/cjk16.bin for SD
@@ -117,7 +116,6 @@ There is no separate serial command protocol. Use the on-device CLI (`status`, `
 - **Wi-Fi is station-only.** Scan/connect can block for seconds; keep that on `tabby_net` or the CLI queue, not in the LVGL loop.
 - **USB is exclusive.** The MSC gadget and USB HID host cannot run together. `UsbMsc::start()` calls `pauseUsbHost()`.
 - **SSH threading.** Call `ssh_channel_*` only from the SSH I/O task. The UI only touches the rings.
-- **libssh override.** `main/idf_component.yml` points `override_path` at `components/libssh`. Upstream comments out SCP sources; the local CMake keeps them.
 - **MicroPython.** Scripts are capped at 64 KB. Interrupts are polled via `tabby_interrupt` at points such as `gfx.present()`.
 - **`vi`.** Mutually exclusive with SSH and a running Python job. Buffer cap is about 256 KB / 8000 lines.
 - Do not commit `sdkconfig`, `managed_components/`, `build/`, `*.bin` font packs, or profiles that contain real credentials.
@@ -126,5 +124,6 @@ There is no separate serial command protocol. Use the on-device CLI (`status`, `
 
 - BLE HID keyboard (present in the Arduino original)
 - SSH public-key / key-file login (password only)
+- SCP file transfer (upstream libssh omits `scp.c`; use `wget` or SD USB for files)
 - CLI pipelines, redirection, job control
 - On-device Tailscale node

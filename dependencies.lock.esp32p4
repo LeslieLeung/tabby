@@ -7,17 +7,21 @@ dependencies:
       type: service
     version: 7.4.3
   david-cermak/libssh:
+    component_hash: ae8918caecfceb8c9ffb49ceb888bbfb0502a14748450e6e77f797970720d7ce
     dependencies:
     - name: espressif/sock_utils
+      registry_url: https://components.espressif.com
+      require: private
       version: '*'
     - name: idf
+      require: private
       version: '>=5.2'
     source:
-      path: /Users/leslieleung/Projects/m5stack/projects/tabby/components/libssh
-      type: local
+      registry_url: https://components.espressif.com/
+      type: service
     version: 0.12.2
   espressif/eppp_link:
-    component_hash: 04f7f31868b8ae6014c96132740a192d09611a6e46aaa7038c865ffc7e26b38f
+    component_hash: c1369b37f2b0b427b198ae14e07e7547d3da92b95fe4dc7f949e5de560b35f21
     dependencies:
     - name: espressif/esp_serial_slave_link
       registry_url: https://components.espressif.com
@@ -29,7 +33,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.1.5
+    version: 1.1.6
   espressif/esp_hosted:
     component_hash: ef6bc803451fab3c3f9a679bbc1c48fba0ceeeabc5af4178dd7d2300fafa423e
     dependencies:
@@ -97,7 +101,7 @@ dependencies:
       require: private
       version: '>=5.0'
     source:
-      registry_url: https://components.espressif.com/
+      registry_url: https://components.espressif.com
       type: service
     version: 0.2.2
   espressif/tinyusb:
@@ -107,7 +111,7 @@ dependencies:
       require: private
       version: '>=5.0'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     targets:
     - esp32s2
@@ -117,7 +121,7 @@ dependencies:
     - esp32s31
     version: 0.19.0~3
   espressif/usb_host_cdc_acm:
-    component_hash: f3893a5e117c65f3c4d90d282bbb43624a2fec4144532e5c72223e69bd1b00e9
+    component_hash: 5bc1372b46de79ccae1dd17de48e30dfa1e8ab75269c2ebf54da01370f9e42fb
     dependencies:
     - name: idf
       require: private
@@ -139,7 +143,7 @@ dependencies:
     - esp32h4
     - esp32s31
     - linux
-    version: 2.4.0
+    version: 2.4.1
   espressif/usb_host_ch34x_vcp:
     component_hash: bf5e9c1c4e6e0a617cc268978b7ae4537d559e6c4b3bdae857dd05b703b4283c
     dependencies:
@@ -177,7 +181,7 @@ dependencies:
       type: service
     version: 2.1.1
   espressif/usb_host_hid:
-    component_hash: a6c5366f9b6d80b0d5f56d085d62941464512e0968b96c5877e76a80fcc23f13
+    component_hash: 74b9c84cd2921a5e987f504c1713ca7819f7e8be80565e5253e9e9c7e07ab881
     dependencies:
     - name: idf
       require: private
@@ -199,13 +203,13 @@ dependencies:
     - esp32h4
     - esp32s31
     - linux
-    version: 1.2.0
+    version: 1.2.1
   idf:
     source:
       type: idf
     version: 5.4.4
   joltwallet/littlefs:
-    component_hash: 01faa388c6305fe77fd6962cda6171e753033458f24f8fae9e9d932e3d817a4c
+    component_hash: 3af20a3d75c49db9dc2286fd50862c34055c9f578419ad1f2bf7ed3ed01391fe
     dependencies:
     - name: idf
       require: private
@@ -213,7 +217,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.22.1
+    version: 1.22.3
   lvgl/lvgl:
     component_hash: d7c1ac037ae6e85d94897f807d6e7ba0946a83e720074fc95a4f6241da9f9f53
     dependencies: []
@@ -222,16 +226,16 @@ dependencies:
       type: service
     version: 8.4.0
   m5stack/M5Unified:
-    component_hash: c724c46511f68cdef357956fb797af558644be707c9adeabd83fce8ce8c8b992
+    component_hash: 869d7193cd5e087c59368276c091f1956571d9b620be139016762658670bc606
     dependencies:
     - name: m5stack/m5gfx
       registry_url: https://components.espressif.com
       require: private
-      version: '>=0.2.27'
+      version: '>=0.2.28'
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 0.2.20
+    version: 0.2.21
   m5stack/m5gfx:
     component_hash: a0d59be99d469d0144bacf0ddf420cdd2a3328f6c392f074b590b56c20b84763
     dependencies: []
@@ -245,7 +249,7 @@ direct_dependencies:
 - espressif/esp_hosted
 - espressif/esp_tinyusb
 - espressif/esp_wifi_remote
-- espressif/sock_utils
+- espressif/tinyusb
 - espressif/usb_host_cdc_acm
 - espressif/usb_host_ch34x_vcp
 - espressif/usb_host_cp210x_vcp
@@ -255,6 +259,6 @@ direct_dependencies:
 - joltwallet/littlefs
 - lvgl/lvgl
 - m5stack/M5Unified
-manifest_hash: 0ffea6d4078057c69c0c20954725735df81f5b47cd007c1c888893a65cdb3acf
+manifest_hash: b2b22f216ddcbe6964be87b0e16b4615be70f570ae23e7195894933b0d7448ca
 target: esp32p4
 version: 2.0.0
